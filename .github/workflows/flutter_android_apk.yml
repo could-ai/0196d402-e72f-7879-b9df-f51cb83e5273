@@ -1,0 +1,45 @@
+name: Flutter Android APK Build
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow
+jobs:
+  flutter_android_apk_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.2'
+          channel: 'stable'
+      - name: Get dependencies
+        working-directory: ./usr
+        run: flutter pub get
+      - name: Setup Android signing
+        run: |
+          echo "Setting up Android signing configuration..."
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
+          
+          # Create key.properties file with signing details
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > ./usr/android/key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> ./usr/android/key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> ./usr/android/key.properties
+          echo "storeFile=$(pwd)/keystore.jks" >> ./usr/android/key.properties
+          
+          # Verify key.properties was created
+          echo "key.properties created at: ./usr/android/key.properties"
+          cat ./usr/android/key.properties | grep -v "storePassword\|keyPassword"
+      - name: Build Android application
+        working-directory: ./usr
+        run: flutter build apk --release
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-apk
+          path: ./usr/build/app/outputs/flutter-apk/*.apk
+          retention-days: 7
